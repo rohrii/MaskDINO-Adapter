@@ -11,6 +11,8 @@ import torch
 from torch import nn, Tensor
 from torch.cuda.amp import autocast
 
+from maskdino.modeling.maskdino_adapter import MaskdinoAdapter
+
 from ...utils.utils import MLP, _get_clones, _get_activation_fn, gen_sineembed_for_position, inverse_sigmoid
 from ..pixel_decoder.ops.modules import MSDeformAttn
 
@@ -175,6 +177,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
                  n_levels=4, n_heads=8, n_points=4,
                  use_deformable_box_attn=False,
                  key_aware_type=None,
+                 use_adapters=False,
                  ):
         super().__init__()
 
@@ -183,11 +186,23 @@ class DeformableTransformerDecoderLayer(nn.Module):
             raise NotImplementedError
         else:
             self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+
+        self.use_adapters = use_adapters
+        
+        # cross attention adapter
+        if use_adapters:
+            self.decoder_cross_attn_adapter = MaskdinoAdapter(d_model)
+        
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
         # self attention
         self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+
+        # self attention adapter
+        if use_adapters:
+            self.decoder_self_attn_adapter = MaskdinoAdapter(d_model)
+        
         self.dropout2 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
 
@@ -246,7 +261,14 @@ class DeformableTransformerDecoderLayer(nn.Module):
         if self.self_attn is not None:
             q = k = self.with_pos_embed(tgt, tgt_query_pos)
             tgt2 = self.self_attn(q, k, tgt, attn_mask=self_attn_mask)[0]
-            tgt = tgt + self.dropout2(tgt2)
+            
+            tgt2 = self.dropout1(tgt2)
+
+            if self.use_adapters:
+                res_input = tgt + tgt2
+                tgt2 = self.decoder_self_attn_adapter(tgt2, residual_input=res_input)
+            
+            tgt = tgt + tgt2
             tgt = self.norm2(tgt)
 
         # cross attention
@@ -261,7 +283,14 @@ class DeformableTransformerDecoderLayer(nn.Module):
                                tgt_reference_points.transpose(0, 1).contiguous(),
                                memory.transpose(0, 1), memory_spatial_shapes, memory_level_start_index,
                                memory_key_padding_mask).transpose(0, 1)
-        tgt = tgt + self.dropout1(tgt2)
+        
+        tgt2 = self.dropout1(tgt2)
+        
+        if self.use_adapters:
+            res_input = tgt + tgt2
+            tgt2 = self.decoder_cross_attn_adapter(tgt2, residual_input=res_input)
+
+        tgt = tgt + tgt2
         tgt = self.norm1(tgt)
 
         # ffn

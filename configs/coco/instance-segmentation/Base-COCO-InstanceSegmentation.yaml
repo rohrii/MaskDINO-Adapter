@@ -3,8 +3,8 @@ MODEL:
     FREEZE_AT: 0
     NAME: "build_resnet_backbone"
   WEIGHTS: "detectron2://ImageNetPretrained/torchvision/R-50.pkl"
-  PIXEL_MEAN: [123.675, 116.280, 103.530]
-  PIXEL_STD: [58.395, 57.120, 57.375]
+  PIXEL_MEAN: [249.4894, 248.8183, 246.3549] # IMPORTANT
+  PIXEL_STD: [18.6302, 20.3218, 28.5849] # IMPORTANT
   RESNETS:
     DEPTH: 50
     STEM_TYPE: "basic"  # not used

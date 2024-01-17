@@ -26,7 +26,7 @@ import torch
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog, build_detection_train_loader
+from detectron2.data import MetadataCatalog, build_detection_train_loader, build_detection_test_loader
 
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
@@ -51,6 +51,9 @@ from maskdino import (
     SemanticSegmentorWithTTA,
     add_maskdino_config,
     DetrDatasetMapper,
+    ZerowasteDatasetMapper,
+    DolphinDatasetMapper,
+    XrayWasteDatasetMapper
 )
 import random
 from detectron2.engine import (
@@ -214,9 +217,34 @@ class Trainer(DefaultTrainer):
         elif cfg.INPUT.DATASET_MAPPER_NAME == "mask_former_semantic":
             mapper = MaskFormerSemanticDatasetMapper(cfg, True)
             return build_detection_train_loader(cfg, mapper=mapper)
+        elif cfg.INPUT.DATASET_MAPPER_NAME == "zerowaste":
+            mapper = ZerowasteDatasetMapper(cfg, True)
+            return build_detection_train_loader(cfg, mapper=mapper)
+        elif cfg.INPUT.DATASET_MAPPER_NAME == "dolphin":
+            mapper = DolphinDatasetMapper(cfg, True)
+            return build_detection_train_loader(cfg, mapper=mapper)
+        elif cfg.INPUT.DATASET_MAPPER_NAME == "xray-waste":
+            mapper = XrayWasteDatasetMapper(cfg, True)
+            return build_detection_train_loader(cfg, mapper=mapper)
         else:
             mapper = None
             return build_detection_train_loader(cfg, mapper=mapper)
+        
+    @classmethod
+    def build_test_loader(cls, cfg, dataset_name):
+        if cfg.INPUT.DATASET_MAPPER_NAME == "zerowaste":
+            mapper = ZerowasteDatasetMapper(cfg, False)
+            return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
+        
+        if cfg.INPUT.DATASET_MAPPER_NAME == "dolphin":
+            mapper = DolphinDatasetMapper(cfg, False)
+            return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
+        
+        if cfg.INPUT.DATASET_MAPPER_NAME == "xray-waste":
+            mapper = XrayWasteDatasetMapper(cfg, False)
+            return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
+        
+        return build_detection_test_loader(cfg, dataset_name)
 
     @classmethod
     def build_lr_scheduler(cls, cfg, optimizer):
@@ -251,8 +279,20 @@ class Trainer(DefaultTrainer):
 
         params: List[Dict[str, Any]] = []
         memo: Set[torch.nn.parameter.Parameter] = set()
+
+        ignore_fix = cfg.SOLVER.IGNORE_FIX if hasattr(cfg.SOLVER, "IGNORE_FIX") else []
+
         for module_name, module in model.named_modules():
             for module_param_name, value in module.named_parameters(recurse=False):
+                value.requires_grad = False
+                for ig in ignore_fix:
+                    if ig in module_name:
+                        value.requires_grad = True
+                        break
+
+                if value.requires_grad:
+                    print("REQUIRES GRAD        ", module_name, module_param_name)
+                
                 if not value.requires_grad:
                     continue
                 # Avoid duplicating parameters
@@ -329,10 +369,13 @@ def setup(args):
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
+    cfg.SOLVER.IGNORE_FIX = []
+    cfg.USE_ADAPTERS = False
+
     # for poly lr schedule
     add_deeplab_config(cfg)
     add_maskdino_config(cfg)
-    cfg.merge_from_file(args.config_file)
+    cfg.merge_from_file(args.config_file)   
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     default_setup(cfg, args)

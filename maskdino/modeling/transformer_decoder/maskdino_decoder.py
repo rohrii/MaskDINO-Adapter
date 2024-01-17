@@ -66,6 +66,7 @@ class MaskDINODecoder(nn.Module):
             query_dim: int = 4,
             dec_layer_share: bool = False,
             semantic_ce_loss: bool = False,
+            use_adapters: bool = False,
     ):
         """
         NOTE: this interface is experimental.
@@ -144,7 +145,8 @@ class MaskDINODecoder(nn.Module):
         self.decoder_norm = decoder_norm = nn.LayerNorm(hidden_dim)
         decoder_layer = DeformableTransformerDecoderLayer(hidden_dim, dim_feedforward,
                                                           dropout, activation,
-                                                          self.num_feature_levels, nhead, dec_n_points)
+                                                          self.num_feature_levels, nhead, dec_n_points,
+                                                          use_adapters=use_adapters)
         self.decoder = TransformerDecoder(decoder_layer, self.num_layers, decoder_norm,
                                           return_intermediate=return_intermediate_dec,
                                           d_model=hidden_dim, query_dim=query_dim,
@@ -186,6 +188,7 @@ class MaskDINODecoder(nn.Module):
         ret["total_num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.TOTAL_NUM_FEATURE_LEVELS
         ret["semantic_ce_loss"] = cfg.MODEL.MaskDINO.TEST.SEMANTIC_ON and cfg.MODEL.MaskDINO.SEMANTIC_CE_LOSS and ~cfg.MODEL.MaskDINO.TEST.PANOPTIC_ON
 
+        ret["use_adapters"] = cfg.USE_ADAPTERS
         return ret
 
     def prepare_for_dn(self, targets, tgt, refpoint_emb, batch_size):

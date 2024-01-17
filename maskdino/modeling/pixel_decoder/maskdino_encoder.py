@@ -19,6 +19,8 @@ from detectron2.config import configurable
 from detectron2.layers import Conv2d, ShapeSpec, get_norm
 from detectron2.modeling import SEM_SEG_HEADS_REGISTRY
 
+from maskdino.modeling.maskdino_adapter import MaskdinoAdapter
+
 from .position_encoding import PositionEmbeddingSine
 from ...utils.utils import _get_clones, _get_activation_fn
 from .ops.modules import MSDeformAttn
@@ -44,7 +46,7 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
     def __init__(self, d_model=256, nhead=8,
                  num_encoder_layers=6, dim_feedforward=1024, dropout=0.1,
                  activation="relu",
-                 num_feature_levels=4, enc_n_points=4,):
+                 num_feature_levels=4, enc_n_points=4, use_adapters=False):
         super().__init__()
 
         self.d_model = d_model
@@ -52,7 +54,8 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
 
         encoder_layer = MSDeformAttnTransformerEncoderLayer(d_model, dim_feedforward,
                                                             dropout, activation,
-                                                            num_feature_levels, nhead, enc_n_points)
+                                                            num_feature_levels, nhead, enc_n_points,
+                                                            use_adapters=use_adapters)
         self.encoder = MSDeformAttnTransformerEncoder(encoder_layer, num_encoder_layers)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
@@ -119,12 +122,19 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4):
+                 n_levels=4, n_heads=8, n_points=4,
+                 use_adapters=False,):
         super().__init__()
 
         # self attention
         self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
+        
+        # adapter
+        self.use_adapters = use_adapters
+        if use_adapters:
+            self.pixel_decoder_self_attention_adapter = MaskdinoAdapter(d_model=d_model)
+        
         self.norm1 = nn.LayerNorm(d_model)
 
         # ffn
@@ -148,7 +158,15 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
     def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None):
         # self attention
         src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
-        src = src + self.dropout1(src2)
+        
+        src2 = self.dropout1(src2)
+
+        # adapter
+        if self.use_adapters:
+            res_input = src + src2
+            src2 = self.pixel_decoder_self_attention_adapter(src2, residual_input=res_input)
+
+        src = src + src2
         src = self.norm1(src)
 
         # ffn
@@ -210,6 +228,7 @@ class MaskDINOEncoder(nn.Module):
         num_feature_levels: int,
         total_num_feature_levels: int,
         feature_order: str,
+        use_adapters: bool,
     ):
         """
         NOTE: this interface is experimental.
@@ -286,6 +305,7 @@ class MaskDINOEncoder(nn.Module):
             dim_feedforward=transformer_dim_feedforward,
             num_encoder_layers=transformer_enc_layers,
             num_feature_levels=self.total_num_feature_levels,
+            use_adapters=use_adapters,
         )
         N_steps = conv_dim // 2
         self.pe_layer = PositionEmbeddingSine(N_steps, normalize=True)
@@ -357,6 +377,7 @@ class MaskDINOEncoder(nn.Module):
         ret["total_num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.TOTAL_NUM_FEATURE_LEVELS
         ret["num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.NUM_FEATURE_LEVELS
         ret["feature_order"] = cfg.MODEL.SEM_SEG_HEAD.FEATURE_ORDER
+        ret["use_adapters"] = cfg.USE_ADAPTERS
         return ret
 
     @autocast(enabled=False)

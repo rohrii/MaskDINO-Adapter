@@ -18,6 +18,9 @@ from .data.dataset_mappers.detr_dataset_mapper import DetrDatasetMapper
 from .data.dataset_mappers.mask_former_semantic_dataset_mapper import (
     MaskFormerSemanticDatasetMapper,
 )
+from .data.dataset_mappers.zerowaste_dataset_mapper import ZerowasteDatasetMapper
+from .data.dataset_mappers.dolphin_dataset_mapper import DolphinDatasetMapper
+from .data.dataset_mappers.xray_waste_dataset_mapper import XrayWasteDatasetMapper
 
 # models
 from .maskdino import MaskDINO
