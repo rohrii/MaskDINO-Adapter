@@ -17,4 +17,4 @@ CUDA_VISIBLE_DEVICES=1 python train_net.py \
     INPUT.MAX_SCALE 2.0 \
     INPUT.DATASET_MAPPER_NAME 'xray-waste' \
     OUTPUT_DIR output/xray-waste_adapter-2_10-epochs \
-    USE_ADAPTERS False
+    USE_ADAPTERS True
