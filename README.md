@@ -1,4 +1,18 @@
-Mask DINO <img src="figures/dinosaur.png" width="30">
+# Mask DINO <img src="figures/dinosaur.png" width="30"> Adapter
+
+This is the repository to fine-tune Mask DINO using bottleneck adapter modules.
+
+### Installation
+- Install the deps from requirements.txt as usual
+- Complete the installation with the original Mask DINO instruction
+- Download the datasets (NDD-20, ZeroWaste-f, WIXray) and configure their file paths in their corresponding dataset registration files of this repo.
+
+
+### Fine-tuning
+- Configure your fine-tuning settings within the provided training shell script example by filling out the \<<FIELDS\>>
+- Start the training with `source train_adapters.sh`
+
+Original Readme:
 ========
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mask-dino-towards-a-unified-transformer-based-1/panoptic-segmentation-on-coco-minival)](https://paperswithcode.com/sota/panoptic-segmentation-on-coco-minival?p=mask-dino-towards-a-unified-transformer-based-1)
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mask-dino-towards-a-unified-transformer-based-1/panoptic-segmentation-on-coco-test-dev)](https://paperswithcode.com/sota/panoptic-segmentation-on-coco-test-dev?p=mask-dino-towards-a-unified-transformer-based-1)
