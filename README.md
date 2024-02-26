@@ -10,7 +10,7 @@ This is the repository to fine-tune Mask DINO using bottleneck adapter modules.
 
 ### Fine-tuning
 - Configure your fine-tuning settings within the provided training shell script example by filling out the \<<FIELDS\>>
-- Start the training with `source train_adapters.sh`
+- Start the training with `source train_adapter.sh`
 
 Original Readme:
 ========
