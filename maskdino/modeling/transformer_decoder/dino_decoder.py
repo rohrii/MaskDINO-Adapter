@@ -178,6 +178,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
                  use_deformable_box_attn=False,
                  key_aware_type=None,
                  use_adapters=False,
+                 adapter_num=1,
+                 adapter_reduction=4,
                  ):
         super().__init__()
 
@@ -191,7 +193,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         
         # cross attention adapter
         if use_adapters:
-            self.decoder_cross_attn_adapter = MaskdinoAdapter(d_model)
+            self.decoder_cross_attn_adapter = MaskdinoAdapter(d_model, adapter_reduction, adapter_num)
         
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
@@ -201,7 +203,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
         # self attention adapter
         if use_adapters:
-            self.decoder_self_attn_adapter = MaskdinoAdapter(d_model)
+            self.decoder_self_attn_adapter = MaskdinoAdapter(d_model, adapter_reduction, adapter_num)
         
         self.dropout2 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)

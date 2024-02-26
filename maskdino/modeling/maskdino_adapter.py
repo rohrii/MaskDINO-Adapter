@@ -3,7 +3,7 @@ from transformers.adapters import AdapterConfig
 from transformers.adapters.modeling import Adapter
 
 class MaskdinoAdapter(nn.Module):
-    def __init__(self, d_model, reduction=4, num_adapters=2):
+    def __init__(self, d_model, reduction=4, num_adapters=1):
         super().__init__()
 
         down_sample = d_model // reduction

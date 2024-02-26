@@ -46,7 +46,8 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
     def __init__(self, d_model=256, nhead=8,
                  num_encoder_layers=6, dim_feedforward=1024, dropout=0.1,
                  activation="relu",
-                 num_feature_levels=4, enc_n_points=4, use_adapters=False):
+                 num_feature_levels=4, enc_n_points=4,
+                 use_adapters=False, adapter_reduction=4, adapter_num=1):
         super().__init__()
 
         self.d_model = d_model
@@ -55,7 +56,9 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
         encoder_layer = MSDeformAttnTransformerEncoderLayer(d_model, dim_feedforward,
                                                             dropout, activation,
                                                             num_feature_levels, nhead, enc_n_points,
-                                                            use_adapters=use_adapters)
+                                                            use_adapters=use_adapters,
+                                                            adapter_reduction=adapter_reduction,
+                                                            adapter_num=adapter_num)
         self.encoder = MSDeformAttnTransformerEncoder(encoder_layer, num_encoder_layers)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
@@ -123,7 +126,7 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
                  n_levels=4, n_heads=8, n_points=4,
-                 use_adapters=False,):
+                 use_adapters=False, adapter_reduction=4, adapter_num=1):
         super().__init__()
 
         # self attention
@@ -133,7 +136,7 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
         # adapter
         self.use_adapters = use_adapters
         if use_adapters:
-            self.pixel_decoder_self_attention_adapter = MaskdinoAdapter(d_model=d_model)
+            self.pixel_decoder_self_attention_adapter = MaskdinoAdapter(d_model=d_model, reduction=adapter_reduction, num_adapters=adapter_num)
         
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -229,6 +232,8 @@ class MaskDINOEncoder(nn.Module):
         total_num_feature_levels: int,
         feature_order: str,
         use_adapters: bool,
+        adapter_reduction: int,
+        adapter_num: int,
     ):
         """
         NOTE: this interface is experimental.
@@ -306,6 +311,8 @@ class MaskDINOEncoder(nn.Module):
             num_encoder_layers=transformer_enc_layers,
             num_feature_levels=self.total_num_feature_levels,
             use_adapters=use_adapters,
+            adapter_num=adapter_num,
+            adapter_reduction=adapter_reduction,
         )
         N_steps = conv_dim // 2
         self.pe_layer = PositionEmbeddingSine(N_steps, normalize=True)
@@ -378,6 +385,8 @@ class MaskDINOEncoder(nn.Module):
         ret["num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.NUM_FEATURE_LEVELS
         ret["feature_order"] = cfg.MODEL.SEM_SEG_HEAD.FEATURE_ORDER
         ret["use_adapters"] = cfg.USE_ADAPTERS
+        ret["adapter_reduction"] = cfg.ADAPTER_REDUCTION
+        ret["adapter_num"] = cfg.ADAPTER_NUM
         return ret
 
     @autocast(enabled=False)

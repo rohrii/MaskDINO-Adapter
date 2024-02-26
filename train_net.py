@@ -282,8 +282,18 @@ class Trainer(DefaultTrainer):
 
         ignore_fix = cfg.SOLVER.IGNORE_FIX if hasattr(cfg.SOLVER, "IGNORE_FIX") else []
 
+        num_trainable_params = 0
+        num_total_params = 0
+        param_size = 0
+        buffer_size = 0
+
         for module_name, module in model.named_modules():
+            for buffer in module.buffers():
+                buffer_size += buffer.nelement() * buffer.element_size()
+
             for module_param_name, value in module.named_parameters(recurse=False):
+                param_size += value.nelement() * value.element_size()
+                
                 value.requires_grad = False
                 for ig in ignore_fix:
                     if ig in module_name:
@@ -291,7 +301,9 @@ class Trainer(DefaultTrainer):
                         break
 
                 if value.requires_grad:
-                    print("REQUIRES GRAD        ", module_name, module_param_name)
+                    num_trainable_params += value.numel()
+                
+                num_total_params += value.numel()
                 
                 if not value.requires_grad:
                     continue
@@ -314,6 +326,11 @@ class Trainer(DefaultTrainer):
                 if isinstance(module, torch.nn.Embedding):
                     hyperparams["weight_decay"] = weight_decay_embed
                 params.append({"params": [value], **hyperparams})
+
+        print(f"NUM TRAINABLE PARAMS: {num_trainable_params} ({((num_trainable_params / num_total_params) * 100):.2f}%)")
+        print(f"NUM TOTAL PARAMS: {num_total_params}")
+        size_all_mb = (param_size + buffer_size) / 1024**2
+        print('TOTAL MODEL SIZE: {:.3f}MB'.format(size_all_mb))
 
         def maybe_add_full_model_gradient_clipping(optim):
             # detectron2 doesn't have full model gradient clipping now
@@ -371,6 +388,8 @@ def setup(args):
     cfg = get_cfg()
     cfg.SOLVER.IGNORE_FIX = []
     cfg.USE_ADAPTERS = False
+    cfg.ADAPTER_NUM = 1
+    cfg.ADAPTER_REDUCTION = 4
 
     # for poly lr schedule
     add_deeplab_config(cfg)

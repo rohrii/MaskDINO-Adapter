@@ -2,7 +2,7 @@ from detectron2.data.datasets import register_coco_instances
 import os
 
 DATA_SET_NAME = "zerowaste"
-DATA_SET_ROOT = os.path.join(os.path.expanduser("~"), "masters-thesis", "datasets", "zerowaste-f")
+DATA_SET_ROOT = os.path.join(os.path.expanduser("~"), "YOUR_PATH_TO_DATASET")
 
 # # TRAIN SET
 TRAIN_IMAGES_DIR_PATH = os.path.join(DATA_SET_ROOT, "train", "data")
@@ -25,7 +25,9 @@ VAL_ANN_FILE_PATH = os.path.join(DATA_SET_ROOT, "val_clean.json")
 
 register_coco_instances(
     name=VAL_DATA_SET_NAME,
-    metadata={},
+    metadata={
+        "thing_classes": ["rigid_plastic", "cardboard", "metal", "soft_plastic"]
+    },
     json_file=VAL_ANN_FILE_PATH,
     image_root=VAL_IMAGES_DIR_PATH
 )

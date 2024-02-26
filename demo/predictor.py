@@ -15,7 +15,7 @@ from detectron2.utils.visualizer import ColorMode, Visualizer
 
 
 class VisualizationDemo(object):
-    def __init__(self, cfg, instance_mode=ColorMode.IMAGE, parallel=False):
+    def __init__(self, cfg, instance_mode=ColorMode.IMAGE, parallel=False, conf_threshold=0.5):
         """
         Args:
             cfg (CfgNode):
@@ -35,6 +35,8 @@ class VisualizationDemo(object):
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)
         else:
             self.predictor = DefaultPredictor(cfg)
+
+        self.conf_threshold = conf_threshold
 
     def run_on_image(self, image):
         """
@@ -61,10 +63,17 @@ class VisualizationDemo(object):
                     predictions["sem_seg"].argmax(dim=0).to(self.cpu_device)
                 )
             if "instances" in predictions:
+                predictions = self.threshold(predictions)
                 instances = predictions["instances"].to(self.cpu_device)
                 vis_output = visualizer.draw_instance_predictions(predictions=instances)
 
         return predictions, vis_output
+    
+    def threshold(self, predictions):
+        instances = predictions["instances"].to(self.cpu_device)
+        instances = instances[instances.scores >= self.conf_threshold]
+        predictions["instances"] = instances
+        return predictions
 
     def _frame_from_video(self, video):
         while video.isOpened():
