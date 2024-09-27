@@ -1,5 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Modified by Bowen Cheng from: https://github.com/facebookresearch/detectron2/blob/master/demo/demo.py
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import argparse
 import glob
 import multiprocessing as mp
@@ -36,10 +39,33 @@ def setup_cfg(args):
     cfg = get_cfg()
     cfg.SOLVER.IGNORE_FIX = []
     cfg.USE_ADAPTERS = False
+    cfg.ADAPTER_NUM = 1
+    cfg.ADAPTER_REDUCTION = 4
+    cfg.USE_LORA = False
+    cfg.LORA_DEFORMABLE_TARGETS = []
+    cfg.LORA_TARGETS = []
+    cfg.LORA_RANK = 8
+    cfg.LORA_ALPHA = 1
+
     add_deeplab_config(cfg)
     add_maskdino_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+
+    # Add the default tunable parameters depending on config
+    ignore_fix_defaults = []
+
+    if cfg.USE_ADAPTERS:
+        adapter_layers = ['pixel_decoder_self_attention_adapter', 'decoder_cross_attn_adapter', 'decoder_self_attn_adapter']
+        ignore_fix_defaults.extend(adapter_layers)
+
+    if cfg.USE_LORA:
+        ignore_fix_defaults.append('lora_')
+    
+    for ign_default in ignore_fix_defaults:
+        if not any(ign_default in ign for ign in cfg.SOLVER.IGNORE_FIX):
+            cfg.SOLVER.IGNORE_FIX.append(ign_default)
+
     cfg.freeze()
     return cfg
 
@@ -51,6 +77,12 @@ def get_parser():
         default="configs/coco/instance-segmentation/maskdino_R50_bs16_50ep_3s.yaml",
         metavar="FILE",
         help="path to config file",
+    )
+    parser.add_argument(
+        "--finetuning-checkpoint",
+        metavar="FILE",
+        help="path to finetuning checkpoint file",
+        default=None,
     )
     parser.add_argument("--webcam", action="store_true", help="Take inputs from webcam.")
     parser.add_argument("--video-input", help="Path to video file.")
@@ -107,7 +139,7 @@ if __name__ == "__main__":
 
     cfg = setup_cfg(args)
 
-    demo = VisualizationDemo(cfg, conf_threshold=args.confidence_threshold)
+    demo = VisualizationDemo(cfg, ft_ckpt=args.finetuning_checkpoint, conf_threshold=args.confidence_threshold)
 
     if args.input:
         if len(args.input) == 1:

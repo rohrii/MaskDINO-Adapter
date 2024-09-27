@@ -9,10 +9,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Modified by Bowen Cheng from https://github.com/fundamentalvision/Deformable-DETR
 
+# Modified by David Rohrschneider from https://github.com/david-rohrschneider/MaskDINO-Adapter
+
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from typing import Literal
 import warnings
 import math
 
@@ -20,6 +23,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.init import xavier_uniform_, constant_
+import loratorch as lora
 
 from ..functions import MSDeformAttnFunction
 from ..functions.ms_deform_attn_func import ms_deform_attn_core_pytorch
@@ -31,14 +35,31 @@ def _is_power_of_2(n):
     return (n & (n-1) == 0) and n != 0
 
 
+LoraDeformableTargets = Literal["sampling_offsets", "attention_weights", "value_proj", "output_proj"]
+
+
 class MSDeformAttn(nn.Module):
-    def __init__(self, d_model=256, n_levels=4, n_heads=8, n_points=4):
+    def __init__(
+            self, 
+            d_model=256,
+            n_levels=4,
+            n_heads=8,
+            n_points=4,
+            use_lora=False,
+            lora_targets: list[LoraDeformableTargets] = [],
+            lora_rank=8,
+            lora_alpha=1,
+        ):
         """
         Multi-Scale Deformable Attention Module
         :param d_model      hidden dimension
         :param n_levels     number of feature levels
         :param n_heads      number of attention heads
         :param n_points     number of sampling points per attention head per feature level
+        :param use_lora     whether to use LoRA (Learnable Residual Attention) in the module
+        :param lora_targets list of targets to apply LoRA, including "sampling_offsets", "attention_weights", "value_proj", "output_proj"
+        :param lora_rank    rank of the LoRA decomposition
+        :param lora_alpha   alpha of the LoRA decomposition
         """
         super().__init__()
         if d_model % n_heads != 0:
@@ -60,6 +81,26 @@ class MSDeformAttn(nn.Module):
         self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
         self.value_proj = nn.Linear(d_model, d_model)
         self.output_proj = nn.Linear(d_model, d_model)
+
+        if use_lora:
+            if not lora_targets:
+                raise ValueError("LoRA is enabled but no targets specified.")
+
+            for target in lora_targets:
+                if target == "sampling_offsets":
+                    self.sampling_offsets = lora.Linear(
+                        d_model, n_heads * n_levels * n_points * 2, r=lora_rank, lora_alpha=lora_alpha
+                    )
+                elif target == "attention_weights":
+                    self.attention_weights = lora.Linear(
+                        d_model, n_heads * n_levels * n_points, r=lora_rank, lora_alpha=lora_alpha
+                    )
+                elif target == "value_proj":
+                    self.value_proj = lora.Linear(d_model, d_model, r=lora_rank, lora_alpha=lora_alpha)
+                elif target == "output_proj":
+                    self.output_proj = lora.Linear(d_model, d_model, r=lora_rank, lora_alpha=lora_alpha)
+                else:
+                    raise ValueError("Invalid LoRA target: {}".format(target))
 
         self._reset_parameters()
 

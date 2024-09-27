@@ -6,9 +6,13 @@
 """
 MaskDINO Training Script based on Mask2Former.
 """
+import warnings
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+
 try:
     from shapely.errors import ShapelyDeprecationWarning
-    import warnings
     warnings.filterwarnings('ignore', category=ShapelyDeprecationWarning)
 except:
     pass
@@ -53,20 +57,22 @@ from maskdino import (
     DetrDatasetMapper,
     ZerowasteDatasetMapper,
     DolphinDatasetMapper,
-    XrayWasteDatasetMapper
+    XrayWasteDatasetMapper,
+    CityscapesDatasetMapper
 )
+from maskdino.fine_tuning_checkpointer import FinetuningCheckpointer
 import random
 from detectron2.engine import (
     DefaultTrainer,
     default_argument_parser,
     default_setup,
-    hooks,
     launch,
     create_ddp_model,
     AMPTrainer,
     SimpleTrainer
 )
 import weakref
+
 
 
 class Trainer(DefaultTrainer):
@@ -97,19 +103,28 @@ class Trainer(DefaultTrainer):
             'trainer': weakref.proxy(self),
         }
         # kwargs.update(model_ema.may_get_ema_checkpointer(cfg, model)) TODO: release ema training for large models
-        self.checkpointer = DetectionCheckpointer(
+        
+        checkpointer_cls = DetectionCheckpointer
+
+        if cfg.SOLVER.IGNORE_FIX:
+            checkpointer_cls = FinetuningCheckpointer
+            kwargs['ignore_fix'] = cfg.SOLVER.IGNORE_FIX
+        
+        self.checkpointer = checkpointer_cls(
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
             **kwargs,
         )
+        
         self.start_iter = 0
         self.max_iter = cfg.SOLVER.MAX_ITER
         self.cfg = cfg
 
         self.register_hooks(self.build_hooks())
+        
         # TODO: release model conversion checkpointer from DINO to MaskDINO
-        self.checkpointer = DetectionCheckpointer(
+        self.checkpointer = checkpointer_cls(
             # Assume you want to save checkpoints together with logs/statistics
             model,
             cfg.OUTPUT_DIR,
@@ -226,6 +241,9 @@ class Trainer(DefaultTrainer):
         elif cfg.INPUT.DATASET_MAPPER_NAME == "xray-waste":
             mapper = XrayWasteDatasetMapper(cfg, True)
             return build_detection_train_loader(cfg, mapper=mapper)
+        elif cfg.INPUT.DATASET_MAPPER_NAME == "cityscapes":
+            mapper = CityscapesDatasetMapper(cfg, True)
+            return build_detection_train_loader(cfg, mapper=mapper)
         else:
             mapper = None
             return build_detection_train_loader(cfg, mapper=mapper)
@@ -244,6 +262,10 @@ class Trainer(DefaultTrainer):
             mapper = XrayWasteDatasetMapper(cfg, False)
             return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
         
+        if cfg.INPUT.DATASET_MAPPER_NAME == "cityscapes":
+            mapper = CityscapesDatasetMapper(cfg, False)
+            return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
+        
         return build_detection_test_loader(cfg, dataset_name)
 
     @classmethod
@@ -255,7 +277,7 @@ class Trainer(DefaultTrainer):
         return build_lr_scheduler(cfg, optimizer)
 
     @classmethod
-    def build_optimizer(cls, cfg, model):
+    def build_optimizer(cls, cfg, model: torch.nn.Module):
         weight_decay_norm = cfg.SOLVER.WEIGHT_DECAY_NORM
         weight_decay_embed = cfg.SOLVER.WEIGHT_DECAY_EMBED
 
@@ -276,6 +298,7 @@ class Trainer(DefaultTrainer):
             torch.nn.LayerNorm,
             torch.nn.LocalResponseNorm,
         )
+        logger = logging.getLogger("detectron2.trainer")
 
         params: List[Dict[str, Any]] = []
         memo: Set[torch.nn.parameter.Parameter] = set()
@@ -296,11 +319,12 @@ class Trainer(DefaultTrainer):
                 
                 value.requires_grad = False
                 for ig in ignore_fix:
-                    if ig in module_name:
+                    if ig in module_param_name or ig in module_name:
                         value.requires_grad = True
                         break
 
                 if value.requires_grad:
+                    logger.info(f"{module_name}: {module_param_name}")
                     num_trainable_params += value.numel()
                 
                 num_total_params += value.numel()
@@ -327,10 +351,10 @@ class Trainer(DefaultTrainer):
                     hyperparams["weight_decay"] = weight_decay_embed
                 params.append({"params": [value], **hyperparams})
 
-        print(f"NUM TRAINABLE PARAMS: {num_trainable_params} ({((num_trainable_params / num_total_params) * 100):.2f}%)")
-        print(f"NUM TOTAL PARAMS: {num_total_params}")
+        logger.info(f"NUM TRAINABLE PARAMS: {num_trainable_params} ({((num_trainable_params / num_total_params) * 100):.2f}%)")
+        logger.info(f"NUM TOTAL PARAMS: {num_total_params}")
         size_all_mb = (param_size + buffer_size) / 1024**2
-        print('TOTAL MODEL SIZE: {:.3f}MB'.format(size_all_mb))
+        logger.info('TOTAL MODEL SIZE: {:.3f}MB'.format(size_all_mb))
 
         def maybe_add_full_model_gradient_clipping(optim):
             # detectron2 doesn't have full model gradient clipping now
@@ -390,12 +414,32 @@ def setup(args):
     cfg.USE_ADAPTERS = False
     cfg.ADAPTER_NUM = 1
     cfg.ADAPTER_REDUCTION = 4
+    cfg.USE_LORA = False
+    cfg.LORA_DEFORMABLE_TARGETS = []
+    cfg.LORA_TARGETS = []
+    cfg.LORA_RANK = 8
+    cfg.LORA_ALPHA = 1
 
     # for poly lr schedule
     add_deeplab_config(cfg)
     add_maskdino_config(cfg)
     cfg.merge_from_file(args.config_file)   
     cfg.merge_from_list(args.opts)
+
+    # Add the default tunable parameters depending on config
+    ignore_fix_defaults = []
+
+    if cfg.USE_ADAPTERS:
+        adapter_layers = ['pixel_decoder_self_attention_adapter', 'decoder_cross_attn_adapter', 'decoder_self_attn_adapter']
+        ignore_fix_defaults.extend(adapter_layers)
+
+    if cfg.USE_LORA:
+        ignore_fix_defaults.append('lora_')
+    
+    for ign_default in ignore_fix_defaults:
+        if not any(ign_default in ign for ign in cfg.SOLVER.IGNORE_FIX):
+            cfg.SOLVER.IGNORE_FIX.append(ign_default)
+
     cfg.freeze()
     default_setup(cfg, args)
     setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name="maskdino")
@@ -407,14 +451,25 @@ def main(args):
     print("Command cfg:", cfg)
     if args.eval_only:
         model = Trainer.build_model(cfg)
-        DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHTS, resume=args.resume
+        checkpointer_cls = DetectionCheckpointer
+        kwargs = {}
+
+        if cfg.SOLVER.IGNORE_FIX:
+            checkpointer_cls = FinetuningCheckpointer
+            kwargs['ignore_fix'] = cfg.SOLVER.IGNORE_FIX
+
+        checkpointer = checkpointer_cls(
+            model,
+            cfg.OUTPUT_DIR,
+            **kwargs,
         )
-        checkpointer = DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR)
+        
         checkpointer.resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
+        
         res = Trainer.test(cfg, model)
+        
         if cfg.TEST.AUG.ENABLED:
             res.update(Trainer.test_with_TTA(cfg, model))
         if comm.is_main_process():

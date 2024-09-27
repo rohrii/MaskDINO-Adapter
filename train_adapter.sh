@@ -7,7 +7,7 @@ CUDA_VISIBLE_DEVICES=1 python train_net.py \
     MODEL.PIXEL_STD "[<<STD_CHANNEL1>>, <<STD_CHANNEL2>>, <<STD_CHANNEL3>>]" \
     SOLVER.IMS_PER_BATCH 4 \
     SOLVER.BASE_LR 0.001 \
-    SOLVER.IGNORE_FIX "['mask_embed', 'class_embed', 'bbox_embed', 'pixel_decoder_self_attention_adapter', 'decoder_cross_attn_adapter', 'decoder_self_attn_adapter']" \
+    SOLVER.IGNORE_FIX "['mask_embed', 'class_embed', 'bbox_embed']" \
     SOLVER.MAX_ITER <<NUM OPTIMIZER STEPS>> \
     SOLVER.CHECKPOINT_PERIOD <<NUM STEPS FOR CHECKPOINT>> \
     SOLVER.STEPS "(<<LR_STEP1>>, <<LR_STEP2>>, ...)" \
