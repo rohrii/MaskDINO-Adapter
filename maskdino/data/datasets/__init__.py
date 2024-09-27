@@ -10,4 +10,5 @@ from . import (
     register_zerowaste_instance,
     register_dolphin_instance,
     register_xray_waste_instance,
+    register_cityscapes_instance,
 )

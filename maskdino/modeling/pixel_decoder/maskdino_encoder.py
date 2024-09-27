@@ -43,22 +43,32 @@ def build_pixel_decoder(cfg, input_shape):
 
 # MSDeformAttn Transformer encoder in deformable detr
 class MSDeformAttnTransformerEncoderOnly(nn.Module):
-    def __init__(self, d_model=256, nhead=8,
-                 num_encoder_layers=6, dim_feedforward=1024, dropout=0.1,
-                 activation="relu",
-                 num_feature_levels=4, enc_n_points=4,
-                 use_adapters=False, adapter_reduction=4, adapter_num=1):
+    def __init__(
+            self, d_model=256, nhead=8,
+            num_encoder_layers=6, dim_feedforward=1024, dropout=0.1,
+            activation="relu",
+            num_feature_levels=4, enc_n_points=4,
+            use_adapters=False, adapter_reduction=4, adapter_num=1,
+            use_lora=False, lora_deformable_targets=[], lora_rank=8, lora_alpha=1
+        ):
         super().__init__()
 
         self.d_model = d_model
         self.nhead = nhead
 
-        encoder_layer = MSDeformAttnTransformerEncoderLayer(d_model, dim_feedforward,
-                                                            dropout, activation,
-                                                            num_feature_levels, nhead, enc_n_points,
-                                                            use_adapters=use_adapters,
-                                                            adapter_reduction=adapter_reduction,
-                                                            adapter_num=adapter_num)
+        encoder_layer = MSDeformAttnTransformerEncoderLayer(
+            d_model, dim_feedforward,
+            dropout, activation,
+            num_feature_levels, nhead, enc_n_points,
+            use_adapters=use_adapters,
+            adapter_reduction=adapter_reduction,
+            adapter_num=adapter_num,
+            use_lora=use_lora,
+            lora_deformable_targets=lora_deformable_targets,
+            lora_rank=lora_rank,
+            lora_alpha=lora_alpha
+        )
+        
         self.encoder = MSDeformAttnTransformerEncoder(encoder_layer, num_encoder_layers)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
@@ -126,11 +136,14 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
                  n_levels=4, n_heads=8, n_points=4,
-                 use_adapters=False, adapter_reduction=4, adapter_num=1):
+                 use_adapters=False, adapter_reduction=4, adapter_num=1,
+                 use_lora=False, lora_deformable_targets=[], lora_rank=8, lora_alpha=1):
         super().__init__()
 
         # self attention
-        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        self.self_attn = MSDeformAttn(
+            d_model, n_levels, n_heads, n_points, use_lora, lora_deformable_targets, lora_rank, lora_alpha
+        )
         self.dropout1 = nn.Dropout(dropout)
         
         # adapter
@@ -234,6 +247,10 @@ class MaskDINOEncoder(nn.Module):
         use_adapters: bool,
         adapter_reduction: int,
         adapter_num: int,
+        use_lora: bool,
+        lora_deformable_targets: List[str],
+        lora_rank: int,
+        lora_alpha: int,
     ):
         """
         NOTE: this interface is experimental.
@@ -313,7 +330,12 @@ class MaskDINOEncoder(nn.Module):
             use_adapters=use_adapters,
             adapter_num=adapter_num,
             adapter_reduction=adapter_reduction,
+            use_lora=use_lora,
+            lora_deformable_targets=lora_deformable_targets,
+            lora_rank=lora_rank,
+            lora_alpha=lora_alpha
         )
+        
         N_steps = conv_dim // 2
         self.pe_layer = PositionEmbeddingSine(N_steps, normalize=True)
 
@@ -384,9 +406,16 @@ class MaskDINOEncoder(nn.Module):
         ret["total_num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.TOTAL_NUM_FEATURE_LEVELS
         ret["num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.NUM_FEATURE_LEVELS
         ret["feature_order"] = cfg.MODEL.SEM_SEG_HEAD.FEATURE_ORDER
+        
+        # ADAPTERS / LoRA settings
         ret["use_adapters"] = cfg.USE_ADAPTERS
         ret["adapter_reduction"] = cfg.ADAPTER_REDUCTION
         ret["adapter_num"] = cfg.ADAPTER_NUM
+        ret["use_lora"] = cfg.USE_LORA
+        ret["lora_deformable_targets"] = cfg.LORA_DEFORMABLE_TARGETS
+        ret["lora_rank"] = cfg.LORA_RANK
+        ret["lora_alpha"] = cfg.LORA_ALPHA
+        
         return ret
 
     @autocast(enabled=False)

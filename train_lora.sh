@@ -1,5 +1,8 @@
-CUDA_VISIBLE_DEVICES=1 python train_net.py \
-    --num-gpus 1 \
+    # --config-file configs/coco/instance-segmentation/swin/maskdino_R50_bs16_50ep_4s_dowsample1_2048.yaml \
+    # MODEL.WEIGHTS maskdino_swinl_50ep_300q_hid2048_3sd1_instance_maskenhanced_mask52.3ap_box59.0ap.pth \
+    # --resume \
+CUDA_VISIBLE_DEVICES=0,1 python train_net.py \
+    --num-gpus 2 \
     --config-file configs/coco/instance-segmentation/maskdino_R50_bs16_50ep_3s_dowsample1_2048.yaml \
     MODEL.WEIGHTS maskdino_r50_50ep_300q_hid2048_3sd1_instance_maskenhanced_mask46.3ap_box51.7ap.pth \
     MODEL.SEM_SEG_HEAD.NUM_CLASSES <<NUM CLASSES>> \
@@ -19,6 +22,8 @@ CUDA_VISIBLE_DEVICES=1 python train_net.py \
     INPUT.MAX_SCALE 2.0 \
     INPUT.DATASET_MAPPER_NAME <<DATASET_MAPPER NAME>> \
     OUTPUT_DIR <<OUTPUT FILE DIR>> \
-    USE_ADAPTERS <<True or False>> \
-    ADAPTER_NUM <<NUM ADAPTERS>> \
-    ADAPTER_REDUCTION <<ADAPTER REDUCTION>>
+    USE_LORA True \
+    LORA_DEFORMABLE_TARGETS "['sampling_offsets', 'value_proj']" \
+    LORA_TARGETS "['q', 'v']" \
+    LORA_RANK 8 \
+    LORA_ALPHA 8

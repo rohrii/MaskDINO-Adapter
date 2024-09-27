@@ -2,7 +2,7 @@ from detectron2.data.datasets import register_coco_instances
 import os
 
 DATA_SET_NAME = "dolphin"
-DATA_SET_ROOT = os.path.join(os.path.expanduser("~"), "YOUR_PATH_TO_DATASET")
+DATA_SET_ROOT = os.path.join(os.path.expanduser("~"), "datasets/ndd20/coco")
 DATA_SET_IMAGES_DIR_PATH = os.path.join(DATA_SET_ROOT, "images")
 
 # # TRAIN SET

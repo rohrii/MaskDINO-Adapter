@@ -11,6 +11,8 @@ import torch
 from torch import nn, Tensor
 from torch.cuda.amp import autocast
 
+import loratorch as lora
+
 from maskdino.modeling.maskdino_adapter import MaskdinoAdapter
 
 from ...utils.utils import MLP, _get_clones, _get_activation_fn, gen_sineembed_for_position, inverse_sigmoid
@@ -180,6 +182,11 @@ class DeformableTransformerDecoderLayer(nn.Module):
                  use_adapters=False,
                  adapter_num=1,
                  adapter_reduction=4,
+                 use_lora=False,
+                 lora_deformable_targets=[],
+                 lora_targets=[],
+                 lora_rank=8,
+                 lora_alpha=1,
                  ):
         super().__init__()
 
@@ -187,7 +194,9 @@ class DeformableTransformerDecoderLayer(nn.Module):
         if use_deformable_box_attn:
             raise NotImplementedError
         else:
-            self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+            self.cross_attn = MSDeformAttn(
+                d_model, n_levels, n_heads, n_points, use_lora, lora_deformable_targets, lora_rank, lora_alpha
+            )
 
         self.use_adapters = use_adapters
         
@@ -199,7 +208,12 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
 
         # self attention
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        if use_lora:
+            self.self_attn = lora.MultiheadAttention(
+                d_model, n_heads, enable_lora=lora_targets, r=lora_rank, lora_alpha=lora_alpha, dropout=dropout
+            )
+        else:
+            self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
 
         # self attention adapter
         if use_adapters:

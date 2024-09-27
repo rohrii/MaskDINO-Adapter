@@ -3,12 +3,16 @@
 This is the repository to fine-tune Mask DINO using bottleneck adapter modules.
 
 ### Installation
-- Install the deps from requirements.txt as usual
-- Complete the installation with the original Mask DINO instruction
+- This repository has been verified to work for `Python 3.10.12` and `CUDA 12.1`
+- Install torch and torch vision for recommended for your CUDA driver: e.g. `pip3 install torch torchvision`
+- Install detectron2: `python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'`
+- Install the deps from requirements.txt: `pip install -r requirements.txt`
+- Build the MSDeformableAttention Code: `cd maskdino/modeling/pixel_decoder/ops && sh make.sh`
 - Download the datasets (NDD-20, ZeroWaste-f, WIXray) and configure their file paths in their corresponding dataset registration files of this repo.
 
 
 ### Fine-tuning
+- Download the base model weights (e.g. SWIN-L) with: `wget https://github.com/IDEA-Research/detrex-storage/releases/download/maskdino-v0.1.0/maskdino_swinl_50ep_300q_hid2048_3sd1_instance_maskenhanced_mask52.3ap_box59.0ap.pth`
 - Configure your fine-tuning settings within the provided training shell script example by filling out the \<<FIELDS\>>
 - Start the training with `source train_adapter.sh`
 

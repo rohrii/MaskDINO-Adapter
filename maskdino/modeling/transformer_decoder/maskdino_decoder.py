@@ -69,6 +69,11 @@ class MaskDINODecoder(nn.Module):
             use_adapters: bool = False,
             adapter_num: int = 1,
             adapter_reduction: int = 4,
+            use_lora: bool = False,
+            lora_deformable_targets: list[str] = [],
+            lora_targets: list[str] = [],
+            lora_rank: int = 8,
+            lora_alpha: int = 1,
     ):
         """
         NOTE: this interface is experimental.
@@ -145,13 +150,19 @@ class MaskDINODecoder(nn.Module):
 
         # init decoder
         self.decoder_norm = decoder_norm = nn.LayerNorm(hidden_dim)
-        decoder_layer = DeformableTransformerDecoderLayer(hidden_dim, dim_feedforward,
-                                                          dropout, activation,
-                                                          self.num_feature_levels, nhead, dec_n_points,
-                                                          use_adapters=use_adapters,
-                                                          adapter_num=adapter_num,
-                                                          adapter_reduction=adapter_reduction,
-                                                          )
+        decoder_layer = DeformableTransformerDecoderLayer(
+            hidden_dim, dim_feedforward,
+            dropout, activation,
+            self.num_feature_levels, nhead, dec_n_points,
+            use_adapters=use_adapters,
+            adapter_num=adapter_num,
+            adapter_reduction=adapter_reduction,
+            use_lora=use_lora,
+            lora_deformable_targets=lora_deformable_targets,
+            lora_targets=lora_targets,
+            lora_rank=lora_rank,
+            lora_alpha=lora_alpha,
+        )
         self.decoder = TransformerDecoder(decoder_layer, self.num_layers, decoder_norm,
                                           return_intermediate=return_intermediate_dec,
                                           d_model=hidden_dim, query_dim=query_dim,
@@ -193,9 +204,16 @@ class MaskDINODecoder(nn.Module):
         ret["total_num_feature_levels"] = cfg.MODEL.SEM_SEG_HEAD.TOTAL_NUM_FEATURE_LEVELS
         ret["semantic_ce_loss"] = cfg.MODEL.MaskDINO.TEST.SEMANTIC_ON and cfg.MODEL.MaskDINO.SEMANTIC_CE_LOSS and ~cfg.MODEL.MaskDINO.TEST.PANOPTIC_ON
 
+        # ADAPTERS / LoRA settings
         ret["use_adapters"] = cfg.USE_ADAPTERS
         ret["adapter_num"] = cfg.ADAPTER_NUM
         ret["adapter_reduction"] = cfg.ADAPTER_REDUCTION
+        ret["use_lora"] = cfg.USE_LORA
+        ret["lora_deformable_targets"] = cfg.LORA_DEFORMABLE_TARGETS
+        ret["lora_targets"] = cfg.LORA_TARGETS
+        ret["lora_rank"] = cfg.LORA_RANK
+        ret["lora_alpha"] = cfg.LORA_ALPHA
+
         return ret
 
     def prepare_for_dn(self, targets, tgt, refpoint_emb, batch_size):
