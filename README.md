@@ -1,6 +1,8 @@
 # Mask DINO <img src="figures/dinosaur.png" width="30"> Adapter
 
-This is the repository to fine-tune Mask DINO using bottleneck adapter modules.
+This is the official repository for ["Parameter-Efficient Fine-Tuning of Large Pretrained Models for Instance Segmentation Tasks"](https://www.mdpi.com/2504-4990/6/4/133)
+
+[Nermeen Abou Baker*](https://scholar.google.com/citations?user=3KL3QSsAAAAJ&hl=en), [David Rohrschneider*](https://scholar.google.com/citations?user=VmjTjOUAAAAJ&hl=de), [Uwe Handmann](https://www.handmann.net/)
 
 ### Installation
 - This repository has been verified to work for `Python 3.10.12` and `CUDA 12.1`
@@ -16,7 +18,24 @@ This is the repository to fine-tune Mask DINO using bottleneck adapter modules.
 - Configure your fine-tuning settings within the provided training shell script example by filling out the \<<FIELDS\>>
 - Start the training with `source train_adapter.sh`
 
-Original Readme:
+### Citation
+To cite our work, please use the following citation:
+```
+@Article{make6040133,
+    AUTHOR = {Abou Baker, Nermeen and Rohrschneider, David and Handmann, Uwe},
+    TITLE = {Parameter-Efficient Fine-Tuning of Large Pretrained Models for Instance Segmentation Tasks},
+    JOURNAL = {Machine Learning and Knowledge Extraction},
+    VOLUME = {6},
+    YEAR = {2024},
+    NUMBER = {4},
+    PAGES = {2783--2807},
+    URL = {https://www.mdpi.com/2504-4990/6/4/133},
+    ISSN = {2504-4990},
+    DOI = {10.3390/make6040133}
+}
+```
+
+Original Readme of Mask DINO:
 ========
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mask-dino-towards-a-unified-transformer-based-1/panoptic-segmentation-on-coco-minival)](https://paperswithcode.com/sota/panoptic-segmentation-on-coco-minival?p=mask-dino-towards-a-unified-transformer-based-1)
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mask-dino-towards-a-unified-transformer-based-1/panoptic-segmentation-on-coco-test-dev)](https://paperswithcode.com/sota/panoptic-segmentation-on-coco-test-dev?p=mask-dino-towards-a-unified-transformer-based-1)
